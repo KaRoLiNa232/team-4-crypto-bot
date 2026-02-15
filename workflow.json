@@ -1,0 +1,313 @@
+{
+  "name": "Crypto Trading Bot - Simple Batch Fixed",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b2fa264e-058b-41fa-a01b-4deb6e5319e9",
+      "name": "Start Bot",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        176,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/dryjins/aib/main/2026/l4/crypto_features_3months.csv",
+        "options": {}
+      },
+      "id": "8b7731cb-0833-4ace-8e5b-0bee0dc14624",
+      "name": "1. Load Market Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/dryjins/aib/main/2026/l4/crypto_news_3months.csv",
+        "options": {}
+      },
+      "id": "2b62ae67-431b-4f58-8f0d-ae01ed3ceebb",
+      "name": "2. Load News Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first();\nlet text = '';\nif (typeof input.json === 'string') text = input.json;\nelse if (input.json.data) text = input.json.data;\nelse if (input.binary) text = Buffer.from(input.binary.data.data, 'base64').toString('utf-8');\n\nconst lines = text.split('\\n').filter(l => l.trim());\nconst headers = lines[0].split(',').map(h => h.trim());\n\nconst result = [];\nfor (let i = 1; i < lines.length; i++) {\n  const line = lines[i];\n  if (!line.trim()) continue;\n  const values = [];\n  let current = '';\n  let inQuotes = false;\n  for (let char of line) {\n    if (char === '\"') inQuotes = !inQuotes;\n    else if (char === ',' && !inQuotes) {\n      values.push(current.trim());\n      current = '';\n    } else current += char;\n  }\n  values.push(current.trim());\n  const obj = {};\n  headers.forEach((h, idx) => obj[h] = values[idx] || '');\n  result.push({ json: obj });\n}\nreturn result;"
+      },
+      "id": "371cd760-f464-441b-a780-43e2d0779ddc",
+      "name": "Parse CSV (Market)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first();\nlet text = '';\nif (typeof input.json === 'string') text = input.json;\nelse if (input.json.data) text = input.json.data;\nelse if (input.binary) text = Buffer.from(input.binary.data.data, 'base64').toString('utf-8');\n\nconst lines = text.split('\\n').filter(l => l.trim());\nconst headers = lines[0].split(',').map(h => h.trim());\n\nconst result = [];\nfor (let i = 1; i < lines.length; i++) {\n  const line = lines[i];\n  if (!line.trim()) continue;\n  const values = [];\n  let current = '';\n  let inQuotes = false;\n  for (let char of line) {\n    if (char === '\"') inQuotes = !inQuotes;\n    else if (char === ',' && !inQuotes) {\n      values.push(current.trim());\n      current = '';\n    } else current += char;\n  }\n  values.push(current.trim());\n  const obj = {};\n  headers.forEach((h, idx) => obj[h] = values[idx] || '');\n  result.push({ json: obj });\n}\nreturn result;"
+      },
+      "id": "ae624c10-53be-4c77-b069-0341620b08af",
+      "name": "Parse CSV (News)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const newsByDate = {};\nfor (const item of $input.all()) {\n  let d = item.json.date || (item.json.datetime ? item.json.datetime.split(' ')[0] : '');\n  if (!d) continue;\n  if (!newsByDate[d]) newsByDate[d] = [];\n  newsByDate[d].push(item.json.title);\n}\nreturn [{ json: { newsByDate } }];"
+      },
+      "id": "3c7f620b-b672-42cd-a4b1-5b40c74902e3",
+      "name": "Group News",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "36c359cb-409e-484b-8966-69d6eaf10505",
+      "name": "Wait for Both",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        1056,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nlet newsLookup = {};\nconst marketData = [];\n\nfor (const item of allItems) {\n  if (item.json.newsByDate) newsLookup = item.json.newsByDate;\n  else if (item.json.date) marketData.push(item);\n}\n\nmarketData.sort((a, b) => new Date(a.json.date) - new Date(b.json.date));\n\nconst merged = [];\nfor (const item of marketData) {\n  let d = item.json.date.split(' ')[0];\n  const news = newsLookup[d] || [];\n  const newsText = news.length > 0 ? news.slice(0, 3).join(' | ') : \"Market is quiet today.\";\n\n  merged.push({\n    json: {\n      ...item.json,\n      news_text: newsText,\n      news_count: news.length\n    }\n  });\n}\n\nreturn merged;"
+      },
+      "id": "4c37f1cf-73c4-4f8d-bbba-b83c4d27b47a",
+      "name": "3. Merge Daily Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simple Batch Preparation\nconst allItems = $input.all();\nconst inputsArray = allItems.map(item => item.json.news_text);\n\n// We store original items to merge later\nreturn [{\n  json: {\n    batch_inputs: inputsArray,\n    original_items: allItems.map(i => i.json)\n  }\n}];"
+      },
+      "id": "2558cbe3-7196-462c-a133-b11226b106d0",
+      "name": "4. Prepare Batch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://router.huggingface.co/hf-inference/models/distilbert/distilbert-base-uncased-finetuned-sst-2-english",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpMultipleHeadersAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\"inputs\": $json.batch_inputs} }}",
+        "options": {}
+      },
+      "id": "f348c696-fe7e-40d0-acee-2a3ad4dde33d",
+      "name": "5. HF Sentiment (Single Batch)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        -32
+      ],
+      "credentials": {
+        "httpMultipleHeadersAuth": {
+          "id": "rTzN58sB0ihFpQMG",
+          "name": "Multiple Headers Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// FINAL STABLE LOGIC (Fixing all CSV columns + High Sharpe)\nconst item = $input.first();\nlet apiResponse = item.json.data || item.json;\nconst originalItems = $(\"4. Prepare Batch\").first().json.original_items; \n\nconst initialCapital = 10000;\nconst tickers = [...new Set(originalItems.map(i => i.ticker))]; \nconst portfolio = {};\ntickers.forEach(t => { \n    portfolio[t] = { balance: initialCapital/tickers.length, coin: 0, inPos: false, entry: 0, returns: [] }; \n});\n\nconst trades = [];\nlet totalTrades = 0, winningTrades = 0;\n\nfor (let i = 0; i < Math.min(originalItems.length, apiResponse.length); i++) {\n    const d = originalItems[i], s = apiResponse[i], ticker = d.ticker;\n    const price = parseFloat(d.price || d.close), rsi = parseFloat(d.rsi) || 50;\n    const wallet = portfolio[ticker];\n\n    let best = Array.isArray(s) ? s.reduce((p, c) => (c.score > p.score ? c : p), {score: 0}) : (s || {label: 'NEUTRAL', score: 0});\n    const sentLabel = best.label;\n    const sentScore = best.score;\n\n    let decision = 'sell'; \n\n    // Логика входа (Sentiment + RSI)\n    if ((sentLabel === 'POSITIVE' && sentScore > 0.85 && rsi < 65) || (rsi < 32 && sentLabel !== 'NEGATIVE')) {\n        decision = 'buy';\n    }\n\n    // Риск-менеджмент\n    if (wallet.inPos) {\n        const pnl = (price - wallet.entry) / wallet.entry;\n        if (pnl < -0.045 || pnl > 0.13 || rsi > 78 || sentLabel === 'NEGATIVE') {\n            decision = 'sell';\n        } else {\n            decision = 'buy'; \n        }\n    }\n\n    // Исполнение\n    if (decision === 'buy') {\n        if (!wallet.inPos) {\n            wallet.coin = wallet.balance / price;\n            wallet.balance = 0;\n            wallet.entry = price;\n            wallet.inPos = true;\n            totalTrades++;\n        }\n    } else { \n        if (wallet.inPos) {\n            wallet.balance = wallet.coin * price;\n            if (price > wallet.entry) winningTrades++;\n            wallet.coin = 0;\n            wallet.inPos = false;\n            totalTrades++;\n        }\n    }\n\n    const currentEquity = wallet.inPos ? (wallet.coin * price) : wallet.balance;\n    const prevEq = wallet.returns.length > 0 ? wallet.returns[wallet.returns.length-1].equity : (initialCapital/tickers.length);\n    wallet.returns.push({ return: (currentEquity - prevEq)/prevEq, equity: currentEquity });\n\n    // ВАЖНО: Ключи ниже СТРОГО соответствуют заголовкам вашего узла Export CSV\n    trades.push({\n        date: d.date,\n        ticker: ticker,\n        price: price.toFixed(2),\n        decision: decision,  // Теперь не undefined\n        rsi: rsi.toFixed(2),\n        sentiment: sentLabel, // Передаем строку (POSITIVE/NEGATIVE), теперь не undefined\n        reason: `Conf:${(sentScore*100).toFixed(0)}% RSI:${rsi.toFixed(0)}`\n    });\n}\n\n// РАСЧЕТ ИТОГОВ\nconst allRets = [];\nlet finalBal = 0;\ntickers.forEach(t => {\n    const w = portfolio[t];\n    w.returns.forEach(r => allRets.push(r.return));\n    finalBal += w.returns[w.returns.length-1].equity;\n});\n\nconst meanR = allRets.reduce((a, b) => a + b, 0) / (allRets.length || 1);\nconst stdD = Math.sqrt(allRets.map(x => Math.pow(x - meanR, 2)).reduce((a, b) => a + b, 0) / (allRets.length || 1));\nconst sharpe = stdD > 0 ? (meanR / stdD) * Math.sqrt(365) : 0;\n\nreturn [{ json: {\n    metric_summary: {\n        \"Sharpe Ratio\": sharpe.toFixed(3),\n        \"Total Return\": (((finalBal - initialCapital)/initialCapital)*100).toFixed(2) + \"%\",\n        \"Win Rate\": ((winningTrades/(totalTrades || 1))*100).toFixed(2) + \"%\",\n        \"Total Trades\": totalTrades,\n        \"Final Balance\": \"$\" + finalBal.toFixed(2)\n    },\n    trade_log: trades\n}}];"
+      },
+      "id": "a4f31a9f-fdcc-42fd-8555-65b182debdd3",
+      "name": "6. Final Logic & Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first();\nconst trades = input.json.trade_log;\nconst summary = input.json.metric_summary;\n\nif (!trades || !summary) throw new Error(\"No data found in previous node\");\n\n// --- 1. Формируем контент для trade_log.csv ---\nconst tradeHeader = 'date,ticker,price,decision,rsi,sentiment,reason\\n';\nconst tradeRows = trades.map(t => {\n  const safeReason = (t.reason || '').replace(/\"/g, \"'\");\n  return `${t.date},${t.ticker},${t.price},${t.decision},${t.rsi},${t.sentiment},\"${safeReason}\"`;\n}).join('\\n');\nconst tradeContent = tradeHeader + tradeRows;\n\n// --- 2. Формируем контент для metrics.csv ---\nconst metricsHeader = 'Metric,Value\\n';\nconst metricsRows = Object.entries(summary).map(([key, value]) => {\n  return `\"${key}\",\"${value}\"`;\n}).join('\\n');\nconst metricsContent = metricsHeader + metricsRows;\n\n// --- 3. Возвращаем два файла в одном узле ---\nreturn [{\n  json: {\n    message: \"Files generated successfully\",\n    sharpe: summary[\"Sharpe Ratio\"]\n  },\n  binary: {\n    // Первый файл\n    data_logs: {\n      data: Buffer.from(tradeContent).toString('base64'),\n      mimeType: 'text/csv',\n      fileName: 'trade_log.csv'\n    },\n    // Второй файл\n    data_metrics: {\n      data: Buffer.from(metricsContent).toString('base64'),\n      mimeType: 'text/csv',\n      fileName: 'metrics.csv'\n    }\n  }\n}];"
+      },
+      "id": "813704a1-6a0d-4659-bbef-0518978d41ea",
+      "name": "7. Export CSV",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        -32
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start Bot": {
+      "main": [
+        [
+          {
+            "node": "1. Load Market Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "2. Load News Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Load Market Data": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV (Market)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Load News Data": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV (News)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CSV (Market)": {
+      "main": [
+        [
+          {
+            "node": "Wait for Both",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CSV (News)": {
+      "main": [
+        [
+          {
+            "node": "Group News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group News": {
+      "main": [
+        [
+          {
+            "node": "Wait for Both",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Wait for Both": {
+      "main": [
+        [
+          {
+            "node": "3. Merge Daily Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Merge Daily Data": {
+      "main": [
+        [
+          {
+            "node": "4. Prepare Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Prepare Batch": {
+      "main": [
+        [
+          {
+            "node": "5. HF Sentiment (Single Batch)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. HF Sentiment (Single Batch)": {
+      "main": [
+        [
+          {
+            "node": "6. Final Logic & Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Final Logic & Metrics": {
+      "main": [
+        [
+          {
+            "node": "7. Export CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "eb1d35b8-2558-4fe6-b80d-97436dd0bcbe",
+  "meta": {
+    "instanceId": "00e2eaad52b19382d1f489cbd4091c5ee3dd565ee74741d601422add55c2ec47"
+  },
+  "id": "lJxTdZRknBHxcX9i",
+  "tags": []
+}
