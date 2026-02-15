@@ -1,10 +1,6 @@
-# team-4-crypto-bot
-# Team XX - Crypto Trading Strategy
+# team-4-Crypto Trading Strategy
 
-## 👥 Members
-- [Ваше Имя] - [Ваш Student ID]
-
-## 🧠 Strategy Overview
+## Strategy Overview
 
 ### Core Logic
 Our strategy focuses on a **News-Based Sentiment & Technical Momentum** approach, optimized for the highest possible **Sharpe Ratio**. We follow a strict binary decision model (Buy/Sell) to comply with the competition rules.
