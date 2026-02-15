@@ -1,4 +1,4 @@
-# team-4-Crypto Trading Strategy
+# Team-4-Crypto Trading Strategy
 
 ## Strategy Overview
 
