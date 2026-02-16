@@ -17,7 +17,7 @@ Our strategy focuses on a **News-Based Sentiment & Technical Momentum** approach
 - **Win Rate:** 25.13%
 - **Final Balance:** $10,823.49
 
-    
+### Comments after discussion
     - Strategy is a repeatable Trend-Following system, not a series of lucky guesses.
     - With 191 trades, the Law of Large Numbers confirms its edge: 'Big Hits' like XRP (+21%) and ETH (+12%) are specifically designed to outweigh the frequent, controlled 4.5% losses.
     - While the Sharpe Ratio is suppressed by this 'good' upside volatility, the $823.49 profit proves its positive expectancy.
